@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2020 CERN.
 # SPDX-FileCopyrightText: 2024 Graz University of Technology.
-# SPDX-FileCopyrightText: 2025 CESNET z.s.p.o.
+# SPDX-FileCopyrightText: 2025-2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 
 """Environment module."""
@@ -66,17 +66,11 @@ def _load_or_set_env(services_version, default_version):
     if not version_from_env:
         os.environ[services_version] = default_version
 
-    elif (
-        _is_version(version_from_env)
-        # for example for minio, where we do not have a semantic version
-        or version_from_env == "latest"
-    ):
+    elif _is_version(version_from_env) or version_from_env == "latest":
         os.environ[services_version] = version_from_env
 
     elif major_version_from_env and (
-        _is_version(major_version_from_env)
-        # for example for minio, where we do not have a semantic version
-        or major_version_from_env == "latest"
+        _is_version(major_version_from_env) or major_version_from_env == "latest"
     ):
         os.environ[services_version] = major_version_from_env
 

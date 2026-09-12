@@ -1,17 +1,18 @@
 # SPDX-FileCopyrightText: 2020 CERN.
 # SPDX-FileCopyrightText: 2024 Graz University of Technology.
-# SPDX-FileCopyrightText: 2025 CESNET z.s.p.o.
+# SPDX-FileCopyrightText: 2025-2026 CESNET z.s.p.o.
 # SPDX-License-Identifier: MIT
 
 """Services module."""
 
+import os
 import time
 from os import path
 from subprocess import PIPE, Popen, check_call
 
 import click
 
-from .config import DOCKER_SERVICES_FILEPATH, MYSQL, SERVICE_TYPES
+from .config import DOCKER_SERVICES_FILEPATH, MYSQL, RUSTFS, SERVICE_TYPES
 
 
 def _run_healthcheck_command(command, verbose=False):
@@ -133,13 +134,72 @@ def redis_healthcheck(*args, **kwargs):
     )
 
 
-def minio_healthcheck(*args, **kwargs):
-    """Minio healthcheck."""
+def _rustfs_s3_client():
+    """Return a botocore S3 client for the local RustFS instance.
+
+    botocore is only needed to initialize RustFS's default bucket, so it is
+    imported lazily here instead of being a hard dependency of the whole CLI.
+    """
+    import botocore.session
+
+    envvars = RUSTFS["CONTAINER_CONNECTION_ENVIRONMENT_VARIABLES"]["s3"]
+    return botocore.session.get_session().create_client(
+        "s3",
+        endpoint_url=os.environ.get("S3_ENDPOINT_URL", envvars["S3_ENDPOINT_URL"]),
+        aws_access_key_id=os.environ.get(
+            "S3_ACCESS_KEY_ID", envvars["S3_ACCESS_KEY_ID"]
+        ),
+        aws_secret_access_key=os.environ.get(
+            "S3_SECRET_ACCESS_KEY", envvars["S3_SECRET_ACCESS_KEY"]
+        ),
+    )
+
+
+def rustfs_create_default_bucket(bucket="default", verbose=False):
+    """Create the RustFS bucket used by default by Invenio's S3 storage.
+
+    Unlike MinIO, RustFS does not auto-create buckets from directories present
+    on its data volume at startup, so this replicates that behaviour.
+    """
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError:
+        click.secho(
+            "botocore is required to initialize the RustFS default bucket. "
+            "Install it with `pip install docker-services-cli[s3]`.",
+            fg="red",
+        )
+        exit(1)
+
+    client = _rustfs_s3_client()
+
+    try:
+        client.create_bucket(Bucket=bucket)
+        return True
+    except (
+        # As of RustFS 1.0.0-rc.6, create_bucket is idempotent and never
+        # raises these. AWS S3 does, so handle them for forward compatibility
+        # in case RustFS aligns closer to AWS S3 semantics.
+        client.exceptions.BucketAlreadyOwnedByYou,
+        client.exceptions.BucketAlreadyExists,
+    ):
+        return True
+    except (ClientError, BotoCoreError) as error:
+        if verbose:
+            click.secho(f"Could not create default bucket: {error}", fg="red")
+        return False
+
+
+def rustfs_healthcheck(*args, **kwargs):
+    """Check RustFS health."""
     verbose = kwargs["verbose"]
 
-    return _run_healthcheck_command(
-        ["curl", "-f", "http://localhost:9000/minio/health/live"], verbose
-    )
+    if not _run_healthcheck_command(
+        ["curl", "-f", "http://localhost:9000/health"], verbose
+    ):
+        return False
+
+    return rustfs_create_default_bucket(verbose=verbose)
 
 
 HEALTHCHECKS = {
@@ -149,7 +209,7 @@ HEALTHCHECKS = {
     "mysql": mysql_healthcheck,
     "rabbitmq": rabbitmq_healthcheck,
     "redis": redis_healthcheck,
-    "minio": minio_healthcheck,
+    "rustfs": rustfs_healthcheck,
 }
 """Health check functions module path, as string."""
 

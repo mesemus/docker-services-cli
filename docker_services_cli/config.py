@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2020-2025 CERN.
 # SPDX-FileCopyrightText: 2024 Graz University of Technology.
-# SPDX-FileCopyrightText: 2025 CESNET z.s.p.o.
+# SPDX-FileCopyrightText: 2025-2026 CESNET z.s.p.o.
 # SPDX-FileCopyrightText: 2026 KTH Royal Institute of Technology.
 # SPDX-License-Identifier: MIT
 
@@ -117,26 +117,26 @@ RABBITMQ = {
 }
 """RabbitMQ service configuration."""
 
-MINIO = {
-    "MINIO_VERSION": "MINIO_2025_LATEST",
-    # note: minio does not do semantic versioning, so we use the latest version
-    # the release at the time of writing this is RELEASE.2025-02-28T09-55-16Z
-    "DEFAULT_VERSIONS": {"MINIO_2025_LATEST": "latest"},
+RUSTFS = {
+    "RUSTFS_VERSION": "RUSTFS_1_LATEST",
+    # note: rustfs is still pre-1.0 (release candidates like 1.0.0-rc.6), so we
+    # track the floating "latest" tag for the 1.x line rather than pinning a rc
+    "DEFAULT_VERSIONS": {"RUSTFS_1_LATEST": "latest"},
     "CONTAINER_CONFIG_ENVIRONMENT_VARIABLES": {
         "S3_ACCESS_KEY_ID": "invenio",
-        # minio needs at least 8 characters for the secret
+        # rustfs needs at least 8 characters for the secret
         "S3_SECRET_ACCESS_KEY": "invenio8",
     },
     "CONTAINER_CONNECTION_ENVIRONMENT_VARIABLES": {
         "s3": {
             "S3_ENDPOINT_URL": "http://localhost:9000",
             "S3_ACCESS_KEY_ID": "invenio",
-            # minio needs at least 8 characters for the secret
+            # rustfs needs at least 8 characters for the secret
             "S3_SECRET_ACCESS_KEY": "invenio8",
         }
     },
 }
-"""MINIO service configuration."""
+"""RustFS service configuration."""
 
 SERVICES = {
     "elasticsearch": ELASTICSEARCH,
@@ -145,7 +145,7 @@ SERVICES = {
     "mysql": MYSQL,
     "redis": REDIS,
     "rabbitmq": RABBITMQ,
-    "minio": MINIO,
+    "rustfs": RUSTFS,
 }
 """List of services to configure."""
 
@@ -156,7 +156,7 @@ SERVICES_ALL_DEFAULT_VERSIONS = {
     **REDIS.get("DEFAULT_VERSIONS", {}),
     **MYSQL.get("DEFAULT_VERSIONS", {}),
     **RABBITMQ.get("DEFAULT_VERSIONS", {}),
-    **MINIO.get("DEFAULT_VERSIONS", {}),
+    **RUSTFS.get("DEFAULT_VERSIONS", {}),
 }
 """Services default latest versions."""
 
@@ -167,6 +167,6 @@ SERVICE_TYPES = {
         "redis",
     ],
     "mq": ["rabbitmq", "redis"],
-    "s3": ["minio"],
+    "s3": ["rustfs"],
 }
 """Types of offered services."""
